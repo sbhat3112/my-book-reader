@@ -77,15 +77,18 @@ nav{background:var(--surface);border-bottom:1.5px solid var(--border);padding:0 
   font-family:Georgia,'Times New Roman',serif;
   line-height:1.85;color:#1e1810;
 }
-.page-inner p{margin:0 0 0.85em;}
-.page-inner h1,.page-inner h2,.page-inner h3{font-family:'Playfair Display',serif;margin:1.2em 0 0.5em;line-height:1.2;}
-.page-inner h1{font-size:1.6em;}
-.page-inner h2{font-size:1.25em;}
+.page-inner p{margin:0;text-indent:1.6em;}
+.page-inner p+p{margin-top:0;}
+.page-inner p:first-child,.page-inner h1+p,.page-inner h2+p,.page-inner h3+p,.page-inner h4+p{text-indent:0;}
+.page-inner h1,.page-inner h2,.page-inner h3,.page-inner h4{font-family:'Playfair Display',serif;margin:1em 0 0.4em;line-height:1.2;text-indent:0;}
+.page-inner h1{font-size:1.5em;}
+.page-inner h2{font-size:1.2em;}
 .page-inner h3{font-size:1.05em;}
-.page-inner img{max-width:100%;display:block;margin:12px auto;}
+.page-inner img{max-width:100%;display:block;margin:10px auto;}
 .page-inner a{color:inherit;text-decoration:none;pointer-events:none;}
-.page-inner blockquote{border-left:3px solid var(--accent);margin:14px 0;padding:2px 14px;color:var(--text2);font-style:italic;}
-.page-inner ol,.page-inner ul{margin:0.5em 0 0.85em 1.4em;}
+.page-inner blockquote{border-left:3px solid var(--accent);margin:12px 0;padding:2px 12px;color:var(--text2);font-style:italic;text-indent:0;}
+.page-inner ol,.page-inner ul{margin:0.4em 0 0.8em 1.4em;text-indent:0;}
+.page-inner li{margin-bottom:0.2em;}
 
 /* Center divider */
 #page-divider{display:none;position:absolute;top:32px;bottom:32px;left:50%;width:1px;background:var(--border);opacity:0.45;z-index:10;pointer-events:none;}
@@ -233,7 +236,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 // ── STATE ───────────────────────────────────────────────────
 let accessToken = null, folderId = null;
 let allBooks = [], progress = {}, currentBook = null;
-let pdfDoc = null, pdfCurrentPage = 1, fontSize = 18;
+let pdfDoc = null, pdfCurrentPage = 1, fontSize = 19;
 let pages = [], currentSpread = 0, totalSpreads = 0, isMobile = false;
 let chromeVisible = false, chromeTimer = null;
 let epubRawHtml = '';
@@ -352,8 +355,22 @@ async function openEpub(data){
       }
       const doc=parser.parseFromString(html,'text/html');
       doc.querySelectorAll('script,style,link,nav,head').forEach(el=>el.remove());
-      doc.querySelectorAll('a').forEach(a=>{if(/^\s*\d+\s*$/.test(a.textContent)){a.remove();return;}a.removeAttribute('href');});
-      combined+=(doc.body?.innerHTML||html);
+      // Remove pure-number anchors (footnote refs)
+      doc.querySelectorAll('a').forEach(a=>{
+        if(/^\s*\d+\s*$/.test(a.textContent)){a.remove();return;}
+        a.removeAttribute('href');
+      });
+      // Normalize: convert divs with only text to paragraphs
+      doc.querySelectorAll('div').forEach(div=>{
+        if(!div.querySelector('div,p,h1,h2,h3,h4,ul,ol,table,img')&&div.textContent.trim()){
+          const p=doc.createElement('p');p.innerHTML=div.innerHTML;div.replaceWith(p);
+        }
+      });
+      // Remove empty elements
+      doc.querySelectorAll('p,span,div').forEach(el=>{if(!el.textContent.trim()&&!el.querySelector('img'))el.remove();});
+      // Add chapter break spacing
+      const bodyHtml=(doc.body?.innerHTML||html);
+      combined+=bodyHtml+'<p class="chapter-break" style="height:0;margin:0;"></p>';
     }
     epubRawHtml=combined;
     await paginateAndRender();
@@ -374,13 +391,13 @@ async function paginateAndRender(){
   const vp=document.getElementById('page-viewport');
   const W=vp.clientWidth, H=vp.clientHeight;
   const pageW=isMobile?W:Math.floor(W/2);
-  const padV=32, padH_val=isMobile?22:52;
+  const padV=40, padH_val=isMobile?24:56;
   const textW=pageW-padH_val*2;
-  const textH=H-padV*2-20; // leave room for pill
+  const textH=H-padV*2-24; // leave room for pill
 
-  // Set up measure div
+  // Set up measure div — must match .page-inner styles exactly
   const mDiv=document.getElementById('measure-div');
-  mDiv.style.cssText=`width:${textW}px;font-size:${fontSize}px;line-height:1.85;font-family:Georgia,serif;color:#1e1810;`;
+  mDiv.style.cssText=`width:${textW}px;font-size:${fontSize}px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;color:#1e1810;overflow:hidden;`;
 
   // Parse HTML into element array
   const temp=document.createElement('div');

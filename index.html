@@ -6,6 +6,7 @@
 <title>My Book Reader</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -366,37 +367,46 @@ const COVER_COLORS = [
 ];
 
 // ─── AUTH ─────────────────────────────────────────────────
-function signIn() {
-  const params = new URLSearchParams({
+let tokenClient = null;
+
+function initGoogleAuth() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
-    redirect_uri: window.location.href.split('?')[0],
-    response_type: 'token',
     scope: SCOPES,
-    prompt: 'select_account'
+    callback: async (response) => {
+      if (response.error) { showToast('Sign in failed: ' + response.error); return; }
+      accessToken = response.access_token;
+      // Store with expiry (1 hour)
+      const expiry = Date.now() + (response.expires_in * 1000);
+      localStorage.setItem('books_token', JSON.stringify({token: accessToken, expiry}));
+      await onSignedIn();
+    }
   });
-  window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+function signIn() {
+  if (tokenClient) tokenClient.requestAccessToken({prompt: 'select_account'});
+  else showToast('Auth loading, please wait a moment...');
 }
 
 function signOut() {
   if (!confirm('Sign out?')) return;
+  if (accessToken) google.accounts.oauth2.revoke(accessToken);
   accessToken = null;
   localStorage.removeItem('books_token');
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
 }
 
-function handleToken() {
-  const hash = window.location.hash;
-  if (hash.includes('access_token')) {
-    const params = new URLSearchParams(hash.substring(1));
-    accessToken = params.get('access_token');
-    localStorage.setItem('books_token', accessToken);
-    window.history.replaceState({}, document.title, window.location.pathname);
+function loadSavedToken() {
+  try {
+    const saved = localStorage.getItem('books_token');
+    if (!saved) return false;
+    const {token, expiry} = JSON.parse(saved);
+    if (Date.now() > expiry) { localStorage.removeItem('books_token'); return false; }
+    accessToken = token;
     return true;
-  }
-  const saved = localStorage.getItem('books_token');
-  if (saved) { accessToken = saved; return true; }
-  return false;
+  } catch { return false; }
 }
 
 async function verifyToken() {
@@ -408,6 +418,17 @@ async function verifyToken() {
     document.getElementById('user-avatar').textContent = initials;
     return true;
   } catch { return false; }
+}
+
+async function onSignedIn() {
+  const valid = await verifyToken();
+  if (!valid) { showToast('Auth failed, please try again'); return; }
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').style.flexDirection = 'column';
+  folderId = await getOrCreateFolder();
+  await refreshLibrary();
+  initDragDrop();
 }
 
 // ─── DRIVE API ────────────────────────────────────────────
@@ -734,21 +755,31 @@ function showToast(msg) {
 
 // ─── INIT ─────────────────────────────────────────────────
 async function init() {
-  if (!handleToken()) {
-    document.getElementById('auth-screen').style.display = 'flex';
-    return;
+  // Wait for GIS to load
+  const waitForGIS = () => new Promise(resolve => {
+    if (window.google?.accounts?.oauth2) { resolve(); return; }
+    const interval = setInterval(() => {
+      if (window.google?.accounts?.oauth2) { clearInterval(interval); resolve(); }
+    }, 100);
+    setTimeout(() => { clearInterval(interval); resolve(); }, 5000);
+  });
+  await waitForGIS();
+  initGoogleAuth();
+
+  // Try saved token
+  if (loadSavedToken()) {
+    const valid = await verifyToken();
+    if (valid) {
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      document.getElementById('app').style.flexDirection = 'column';
+      folderId = await getOrCreateFolder();
+      await refreshLibrary();
+      initDragDrop();
+      return;
+    }
   }
-  const valid = await verifyToken();
-  if (!valid) {
-    document.getElementById('auth-screen').style.display = 'flex';
-    return;
-  }
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  document.getElementById('app').style.flexDirection = 'column';
-  folderId = await getOrCreateFolder();
-  await refreshLibrary();
-  initDragDrop();
+  document.getElementById('auth-screen').style.display = 'flex';
 }
 
 init();

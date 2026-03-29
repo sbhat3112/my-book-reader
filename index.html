@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Book Reader</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --surface: #fffdf8;
+    --surface2: #f0ebe0;
+    --accent: #c8602a;
+    --accent2: #2a6cb5;
+    --text: #1a1410;
+    --text2: #6b5e4e;
+    --border: #d9cfc0;
+    --shadow: rgba(0,0,0,0.10);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Lato', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* AUTH SCREEN */
+  #auth-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 32px; padding: 40px 20px;
+  }
+  .auth-logo { font-family: 'Playfair Display', serif; font-size: 2.8rem; color: var(--accent); letter-spacing: -1px; }
+  .auth-logo span { color: var(--text); }
+  .auth-sub { color: var(--text2); font-size: 1.05rem; text-align: center; max-width: 340px; line-height: 1.6; }
+  .btn-google {
+    display: flex; align-items: center; gap: 12px;
+    background: white; border: 1.5px solid var(--border);
+    padding: 14px 28px; border-radius: 50px;
+    font-family: 'Lato', sans-serif; font-size: 1rem; font-weight: 700;
+    color: var(--text); cursor: pointer;
+    box-shadow: 0 2px 12px var(--shadow);
+    transition: all 0.2s;
+  }
+  .btn-google:hover { box-shadow: 0 4px 24px var(--shadow); transform: translateY(-2px); }
+  .btn-google svg { width: 22px; height: 22px; }
+
+  /* TOP NAV */
+  #app { display: none; flex-direction: column; min-height: 100vh; }
+  nav {
+    background: var(--surface);
+    border-bottom: 1.5px solid var(--border);
+    padding: 0 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 12px var(--shadow);
+  }
+  .nav-logo { font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--accent); }
+  .nav-actions { display: flex; align-items: center; gap: 12px; }
+  .btn {
+    font-family: 'Lato', sans-serif; font-weight: 700; font-size: 0.9rem;
+    padding: 9px 20px; border-radius: 50px; border: none; cursor: pointer;
+    transition: all 0.18s;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #b05020; transform: translateY(-1px); }
+  .btn-outline { background: transparent; color: var(--text2); border: 1.5px solid var(--border); }
+  .btn-outline:hover { background: var(--surface2); }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--accent2); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.95rem; cursor: pointer;
+  }
+
+  /* LIBRARY */
+  #library {
+    padding: 36px 28px 60px;
+    max-width: 1200px; margin: 0 auto; width: 100%;
+  }
+  .library-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 28px; flex-wrap: wrap; gap: 16px;
+  }
+  .library-title { font-family: 'Playfair Display', serif; font-size: 2rem; color: var(--text); }
+  .search-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: 50px; padding: 8px 18px; width: 280px;
+  }
+  .search-bar input {
+    border: none; background: transparent; font-family: 'Lato', sans-serif;
+    font-size: 0.95rem; color: var(--text); outline: none; width: 100%;
+  }
+  .books-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 24px;
+  }
+  .book-card {
+    cursor: pointer; border-radius: var(--radius); overflow: hidden;
+    background: var(--surface);
+    box-shadow: 0 2px 12px var(--shadow);
+    transition: all 0.22s;
+    position: relative;
+  }
+  .book-card:hover { transform: translateY(-6px); box-shadow: 0 12px 32px var(--shadow); }
+  .book-cover {
+    width: 100%; aspect-ratio: 2/3;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem; font-style: italic;
+    padding: 18px; text-align: center;
+    line-height: 1.3;
+    color: white;
+    position: relative; overflow: hidden;
+  }
+  .book-cover::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 6px; background: rgba(0,0,0,0.2);
+  }
+  .book-info { padding: 12px 14px 14px; }
+  .book-title { font-weight: 700; font-size: 0.88rem; color: var(--text); line-height: 1.3; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .book-type { font-size: 0.75rem; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .progress-bar-wrap { margin-top: 8px; background: var(--surface2); border-radius: 4px; height: 4px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.4s; }
+  .progress-label { font-size: 0.72rem; color: var(--text2); margin-top: 4px; }
+  .empty-state {
+    grid-column: 1/-1; text-align: center; padding: 80px 20px;
+    color: var(--text2);
+  }
+  .empty-state .icon { font-size: 4rem; margin-bottom: 16px; }
+  .empty-state p { font-size: 1.1rem; margin-bottom: 20px; }
+
+  /* UPLOAD ZONE */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 40px; text-align: center; margin-bottom: 32px;
+    cursor: pointer; transition: all 0.2s; background: var(--surface);
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: #fdf5ee; }
+  .upload-zone p { color: var(--text2); font-size: 0.95rem; }
+  .upload-zone .icon { font-size: 2.5rem; margin-bottom: 10px; }
+  #file-input { display: none; }
+
+  /* READER */
+  #reader-screen {
+    display: none; flex-direction: column;
+    min-height: 100vh; background: var(--bg);
+  }
+  .reader-nav {
+    background: var(--surface); border-bottom: 1.5px solid var(--border);
+    padding: 0 24px; height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+  .reader-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--text); max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .reader-controls { display: flex; align-items: center; gap: 10px; }
+  .icon-btn {
+    background: transparent; border: 1.5px solid var(--border);
+    border-radius: 50px; width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.18s; font-size: 1rem;
+  }
+  .icon-btn:hover { background: var(--surface2); }
+
+  /* EPUB reader */
+  #epub-container {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    padding: 32px 20px 80px;
+  }
+  #epub-content {
+    max-width: 680px; width: 100%;
+    background: var(--surface); border-radius: var(--radius);
+    padding: 48px 52px;
+    box-shadow: 0 4px 24px var(--shadow);
+    font-family: 'Lato', sans-serif; font-size: 1.08rem;
+    line-height: 1.85; color: var(--text);
+    min-height: 400px;
+  }
+  #epub-content img { max-width: 100%; border-radius: 8px; }
+  #epub-content h1, #epub-content h2, #epub-content h3 {
+    font-family: 'Playfair Display', serif; margin: 24px 0 12px; color: var(--text);
+  }
+  #epub-content p { margin-bottom: 16px; }
+  #epub-content a { color: var(--accent2); }
+
+  .epub-nav-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 1.5px solid var(--border);
+    padding: 12px 24px; display: flex; align-items: center; justify-content: center;
+    gap: 16px; z-index: 100;
+  }
+  .epub-progress { flex: 1; max-width: 300px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .epub-progress-bar { width: 100%; height: 4px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .epub-progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+  .epub-progress-text { font-size: 0.78rem; color: var(--text2); }
+
+  /* PDF reader */
+  #pdf-container {
+    flex: 1; overflow-y: auto; padding: 24px 20px 100px;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  #pdf-container canvas {
+    max-width: 100%; border-radius: 8px;
+    box-shadow: 0 4px 24px var(--shadow);
+    background: white;
+  }
+  .pdf-nav-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 1.5px solid var(--border);
+    padding: 12px 24px; display: flex; align-items: center; justify-content: center;
+    gap: 16px; z-index: 100;
+  }
+  .page-indicator { font-size: 0.9rem; color: var(--text2); min-width: 100px; text-align: center; }
+
+  /* LOADING */
+  .loading {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; padding: 80px 20px; color: var(--text2);
+  }
+  .spinner {
+    width: 40px; height: 40px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* TOAST */
+  #toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: white; padding: 12px 24px; border-radius: 50px;
+    font-size: 0.9rem; opacity: 0; transition: all 0.3s; z-index: 999; pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 600px) {
+    nav { padding: 0 14px; }
+    #library { padding: 20px 14px 60px; }
+    #epub-content { padding: 28px 20px; }
+    .library-title { font-size: 1.5rem; }
+    .books-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 16px; }
+    .search-bar { width: 100%; }
+    .library-header { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-logo">📚 <span>My</span>Books</div>
+  <div class="auth-sub">Your personal book library — stored in your Google Drive, readable anywhere.</div>
+  <button class="btn-google" onclick="signIn()">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
+    Sign in with Google
+  </button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <nav>
+    <div class="nav-logo">📚 MyBooks</div>
+    <div class="nav-actions">
+      <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">+ Upload Book</button>
+      <div class="avatar" id="user-avatar" title="Sign out" onclick="signOut()">?</div>
+    </div>
+  </nav>
+
+  <div id="library">
+    <div class="library-header">
+      <div class="library-title">My Library</div>
+      <div class="search-bar">
+        <span>🔍</span>
+        <input type="text" placeholder="Search books..." id="search-input" oninput="filterBooks()">
+      </div>
+    </div>
+
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">📂</div>
+      <p><strong>Click to upload</strong> or drag & drop books here</p>
+      <p style="font-size:0.82rem;margin-top:6px;">Supports EPUB and PDF</p>
+    </div>
+    <input type="file" id="file-input" accept=".epub,.pdf" multiple onchange="uploadBooks(event)">
+
+    <div class="books-grid" id="books-grid">
+      <div class="empty-state">
+        <div class="icon">📖</div>
+        <p>Loading your library...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- READER SCREEN -->
+<div id="reader-screen">
+  <div class="reader-nav">
+    <button class="icon-btn" onclick="closeReader()" title="Back to library">←</button>
+    <div class="reader-title" id="reader-title">Book Title</div>
+    <div class="reader-controls">
+      <button class="icon-btn" id="font-dec" title="Smaller text" onclick="changeFontSize(-1)">A-</button>
+      <button class="icon-btn" id="font-inc" title="Larger text" onclick="changeFontSize(1)">A+</button>
+    </div>
+  </div>
+
+  <!-- EPUB Reader -->
+  <div id="epub-container" style="display:none;">
+    <div id="epub-content"></div>
+    <div class="epub-nav-bar">
+      <button class="btn btn-outline" id="epub-prev" onclick="epubPrev()">← Prev</button>
+      <div class="epub-progress">
+        <div class="epub-progress-bar"><div class="epub-progress-fill" id="epub-prog-fill" style="width:0%"></div></div>
+        <div class="epub-progress-text" id="epub-prog-text">Chapter 1</div>
+      </div>
+      <button class="btn btn-outline" id="epub-next" onclick="epubNext()">Next →</button>
+    </div>
+  </div>
+
+  <!-- PDF Reader -->
+  <div id="pdf-container" style="display:none;"></div>
+  <div class="pdf-nav-bar" id="pdf-nav" style="display:none;">
+    <button class="btn btn-outline" onclick="pdfPrev()">← Prev</button>
+    <div class="page-indicator" id="page-indicator">Page 1 of 1</div>
+    <button class="btn btn-outline" onclick="pdfNext()">Next →</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────
+const CLIENT_ID = '101355831458-ecb4pgkana89anjh9u1q9vg1fbemv76q.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const FOLDER_NAME = 'MyBooksApp';
+const PROGRESS_FILE = 'mybooksapp_progress.json';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ─── STATE ────────────────────────────────────────────────
+let accessToken = null;
+let folderId = null;
+let books = [];
+let progress = {};
+let currentBook = null;
+let epubChapters = [];
+let epubCurrentChapter = 0;
+let pdfDoc = null;
+let pdfCurrentPage = 1;
+let fontSize = 18;
+let allBooks = [];
+
+const COVER_COLORS = [
+  ['#c8602a','#e8905a'],['#2a6cb5','#5a9ce8'],['#2a8c5a','#5ab87a'],
+  ['#7a2a8c','#b05ac0'],['#8c6a2a','#c0a05a'],['#2a7a8c','#5ab0c0'],
+  ['#8c2a4a','#c05a7a'],['#4a6a2a','#7ab05a']
+];
+
+// ─── AUTH ─────────────────────────────────────────────────
+function signIn() {
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: window.location.href.split('?')[0],
+    response_type: 'token',
+    scope: SCOPES,
+    prompt: 'select_account'
+  });
+  window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
+function signOut() {
+  if (!confirm('Sign out?')) return;
+  accessToken = null;
+  localStorage.removeItem('books_token');
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+function handleToken() {
+  const hash = window.location.hash;
+  if (hash.includes('access_token')) {
+    const params = new URLSearchParams(hash.substring(1));
+    accessToken = params.get('access_token');
+    localStorage.setItem('books_token', accessToken);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return true;
+  }
+  const saved = localStorage.getItem('books_token');
+  if (saved) { accessToken = saved; return true; }
+  return false;
+}
+
+async function verifyToken() {
+  try {
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + accessToken);
+    const d = await r.json();
+    if (d.error) { localStorage.removeItem('books_token'); return false; }
+    const initials = (d.email || '?').charAt(0).toUpperCase();
+    document.getElementById('user-avatar').textContent = initials;
+    return true;
+  } catch { return false; }
+}
+
+// ─── DRIVE API ────────────────────────────────────────────
+async function driveApi(path, opts={}) {
+  const r = await fetch('https://www.googleapis.com/drive/v3/' + path, {
+    ...opts,
+    headers: { Authorization: 'Bearer ' + accessToken, ...(opts.headers||{}) }
+  });
+  if (r.status === 401) { localStorage.removeItem('books_token'); location.reload(); }
+  return r;
+}
+
+async function getOrCreateFolder() {
+  const r = await driveApi(`files?q=name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)`);
+  const d = await r.json();
+  if (d.files && d.files.length > 0) return d.files[0].id;
+  const cr = await driveApi('files', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const cd = await cr.json();
+  return cd.id;
+}
+
+async function listBooks() {
+  const r = await driveApi(`files?q='${folderId}' in parents and trashed=false and (name contains '.epub' or name contains '.pdf')&fields=files(id,name,size,modifiedTime)&orderBy=name`);
+  const d = await r.json();
+  return d.files || [];
+}
+
+async function loadProgress() {
+  const r = await driveApi(`files?q='${folderId}' in parents and name='${PROGRESS_FILE}' and trashed=false&fields=files(id)`);
+  const d = await r.json();
+  if (!d.files || !d.files.length) return {};
+  const fr = await driveApi(`files/${d.files[0].id}?alt=media`);
+  try { return await fr.json(); } catch { return {}; }
+}
+
+async function saveProgress() {
+  const r = await driveApi(`files?q='${folderId}' in parents and name='${PROGRESS_FILE}' and trashed=false&fields=files(id)`);
+  const d = await r.json();
+  const body = JSON.stringify(progress);
+  const blob = new Blob([body], {type:'application/json'});
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify({name: PROGRESS_FILE, parents: d.files?.length ? undefined : [folderId]})], {type:'application/json'}));
+  form.append('file', blob);
+  if (d.files && d.files.length) {
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${d.files[0].id}?uploadType=multipart`, {
+      method: 'PATCH', headers: {Authorization:'Bearer '+accessToken}, body: form
+    });
+  } else {
+    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST', headers: {Authorization:'Bearer '+accessToken}, body: form
+    });
+  }
+}
+
+async function downloadFile(fileId) {
+  const r = await driveApi(`files/${fileId}?alt=media`);
+  return await r.arrayBuffer();
+}
+
+// ─── UPLOAD ───────────────────────────────────────────────
+async function uploadBooks(event) {
+  const files = Array.from(event.target.files);
+  if (!files.length) return;
+  showToast(`Uploading ${files.length} book(s)...`);
+  for (const file of files) {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({name: file.name, parents:[folderId]})], {type:'application/json'}));
+    form.append('file', file);
+    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST', headers: {Authorization:'Bearer '+accessToken}, body: form
+    });
+  }
+  showToast('Upload complete!');
+  await refreshLibrary();
+  event.target.value = '';
+}
+
+// ─── LIBRARY ──────────────────────────────────────────────
+function getCoverColor(name) {
+  let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % COVER_COLORS.length;
+  return COVER_COLORS[Math.abs(h)];
+}
+
+function renderBooks(list) {
+  const grid = document.getElementById('books-grid');
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="icon">📚</div><p>No books yet. Upload your first book!</p></div>`;
+    return;
+  }
+  grid.innerHTML = list.map((b,i) => {
+    const [c1,c2] = getCoverColor(b.name);
+    const cleanName = b.name.replace(/\.(epub|pdf)$/i,'');
+    const ext = b.name.split('.').pop().toUpperCase();
+    const prog = progress[b.id] || {};
+    const pct = prog.percent || 0;
+    return `
+    <div class="book-card" onclick="openBook('${b.id}','${ext}','${cleanName.replace(/'/g,"\\'")}')">
+      <div class="book-cover" style="background:linear-gradient(135deg,${c1},${c2})">
+        ${cleanName}
+      </div>
+      <div class="book-info">
+        <div class="book-title" title="${cleanName}">${cleanName}</div>
+        <div class="book-type">${ext}</div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+        <div class="progress-label">${pct > 0 ? pct+'% read' : 'Not started'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterBooks() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  renderBooks(q ? allBooks.filter(b => b.name.toLowerCase().includes(q)) : allBooks);
+}
+
+async function refreshLibrary() {
+  allBooks = await listBooks();
+  progress = await loadProgress();
+  renderBooks(allBooks);
+}
+
+// ─── OPEN BOOK ────────────────────────────────────────────
+async function openBook(fileId, type, name) {
+  currentBook = {fileId, type, name};
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('reader-screen').style.display = 'flex';
+  document.getElementById('reader-title').textContent = name;
+  document.getElementById('epub-container').style.display = 'none';
+  document.getElementById('pdf-container').style.display = 'none';
+  document.getElementById('pdf-nav').style.display = 'none';
+  document.getElementById('epub-container').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading book...</p></div>';
+  document.getElementById('epub-container').style.display = 'flex';
+
+  const data = await downloadFile(fileId);
+  if (type === 'EPUB') openEpub(data);
+  else openPdf(data);
+}
+
+function closeReader() {
+  document.getElementById('reader-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  currentBook = null;
+}
+
+// ─── EPUB ─────────────────────────────────────────────────
+async function openEpub(data) {
+  try {
+    const zip = await JSZip.loadAsync(data);
+    // Parse container.xml
+    const containerXml = await zip.file('META-INF/container.xml').async('string');
+    const parser = new DOMParser();
+    const containerDoc = parser.parseFromString(containerXml, 'application/xml');
+    const opfPath = containerDoc.querySelector('rootfile').getAttribute('full-path');
+    const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/')+1) : '';
+
+    // Parse OPF
+    const opfXml = await zip.file(opfPath).async('string');
+    const opfDoc = parser.parseFromString(opfXml, 'application/xml');
+
+    // Build manifest
+    const manifest = {};
+    opfDoc.querySelectorAll('manifest item').forEach(item => {
+      manifest[item.getAttribute('id')] = { href: item.getAttribute('href'), type: item.getAttribute('media-type') };
+    });
+
+    // Build spine
+    const spineItems = Array.from(opfDoc.querySelectorAll('spine itemref')).map(i => i.getAttribute('idref'));
+    epubChapters = [];
+    for (const id of spineItems) {
+      if (!manifest[id]) continue;
+      const href = opfDir + manifest[id].href;
+      const file = zip.file(href) || zip.file(decodeURIComponent(href));
+      if (!file) continue;
+      let html = await file.async('string');
+      // Inline images
+      const imgMatches = html.matchAll(/src=["']([^"']+)["']/g);
+      for (const m of imgMatches) {
+        const imgPath = opfDir + m[1];
+        const imgFile = zip.file(imgPath);
+        if (imgFile) {
+          const b64 = await imgFile.async('base64');
+          const ext = m[1].split('.').pop().toLowerCase();
+          const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/gif';
+          html = html.replace(m[0], `src="data:${mime};base64,${b64}"`);
+        }
+      }
+      epubChapters.push(html);
+    }
+
+    // Restore progress
+    const saved = progress[currentBook.fileId] || {};
+    epubCurrentChapter = saved.chapter || 0;
+    if (epubCurrentChapter >= epubChapters.length) epubCurrentChapter = 0;
+
+    document.getElementById('epub-container').style.display = 'flex';
+    document.getElementById('epub-container').innerHTML = `
+      <div id="epub-content"></div>
+      <div class="epub-nav-bar">
+        <button class="btn btn-outline" onclick="epubPrev()">← Prev</button>
+        <div class="epub-progress">
+          <div class="epub-progress-bar"><div class="epub-progress-fill" id="epub-prog-fill"></div></div>
+          <div class="epub-progress-text" id="epub-prog-text"></div>
+        </div>
+        <button class="btn btn-outline" onclick="epubNext()">Next →</button>
+      </div>`;
+    document.getElementById('epub-container').style.flexDirection = 'column';
+    document.getElementById('epub-container').style.alignItems = 'center';
+    document.getElementById('epub-container').style.padding = '32px 20px 80px';
+
+    renderEpubChapter();
+  } catch(e) {
+    document.getElementById('epub-container').innerHTML = `<div class="loading"><p>⚠️ Could not parse this EPUB file.<br>It may be DRM protected.</p></div>`;
+  }
+}
+
+function renderEpubChapter() {
+  const content = document.getElementById('epub-content');
+  if (!content) return;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(epubChapters[epubCurrentChapter], 'text/html');
+  const body = doc.body ? doc.body.innerHTML : epubChapters[epubCurrentChapter];
+  content.innerHTML = body;
+  content.style.fontSize = fontSize + 'px';
+  content.scrollTop = 0;
+  window.scrollTo(0,0);
+  const pct = Math.round(((epubCurrentChapter+1)/epubChapters.length)*100);
+  const fill = document.getElementById('epub-prog-fill');
+  const text = document.getElementById('epub-prog-text');
+  if (fill) fill.style.width = pct + '%';
+  if (text) text.textContent = `Chapter ${epubCurrentChapter+1} of ${epubChapters.length}`;
+  saveEpubProgress(pct);
+}
+
+async function saveEpubProgress(pct) {
+  if (!currentBook) return;
+  progress[currentBook.fileId] = { chapter: epubCurrentChapter, percent: pct, type: 'epub' };
+  await saveProgress();
+}
+
+function epubNext() {
+  if (epubCurrentChapter < epubChapters.length-1) { epubCurrentChapter++; renderEpubChapter(); }
+  else showToast('You reached the end of the book! 🎉');
+}
+function epubPrev() {
+  if (epubCurrentChapter > 0) { epubCurrentChapter--; renderEpubChapter(); }
+}
+
+// ─── PDF ──────────────────────────────────────────────────
+async function openPdf(data) {
+  document.getElementById('epub-container').style.display = 'none';
+  document.getElementById('pdf-container').style.display = 'flex';
+  document.getElementById('pdf-container').style.flexDirection = 'column';
+  document.getElementById('pdf-nav').style.display = 'flex';
+  document.getElementById('pdf-container').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading PDF...</p></div>';
+
+  pdfDoc = await pdfjsLib.getDocument({data}).promise;
+  const saved = progress[currentBook.fileId] || {};
+  pdfCurrentPage = saved.page || 1;
+  if (pdfCurrentPage > pdfDoc.numPages) pdfCurrentPage = 1;
+  document.getElementById('pdf-container').innerHTML = '';
+  await renderPdfPage(pdfCurrentPage);
+}
+
+async function renderPdfPage(pageNum) {
+  const container = document.getElementById('pdf-container');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const page = await pdfDoc.getPage(pageNum);
+  const vp = page.getViewport({scale: Math.min(2, (window.innerWidth - 40) / page.getViewport({scale:1}).width)});
+  const canvas = document.createElement('canvas');
+  canvas.width = vp.width; canvas.height = vp.height;
+  const ctx = canvas.getContext('2d');
+  container.innerHTML = '';
+  container.appendChild(canvas);
+  await page.render({canvasContext: ctx, viewport: vp}).promise;
+  const pct = Math.round((pageNum/pdfDoc.numPages)*100);
+  document.getElementById('page-indicator').textContent = `Page ${pageNum} of ${pdfDoc.numPages}`;
+  progress[currentBook.fileId] = {page: pageNum, percent: pct, type:'pdf'};
+  await saveProgress();
+}
+
+async function pdfNext() {
+  if (pdfCurrentPage < pdfDoc.numPages) { pdfCurrentPage++; await renderPdfPage(pdfCurrentPage); }
+  else showToast('Last page! 🎉');
+}
+async function pdfPrev() {
+  if (pdfCurrentPage > 1) { pdfCurrentPage--; await renderPdfPage(pdfCurrentPage); }
+}
+
+// ─── FONT SIZE ────────────────────────────────────────────
+function changeFontSize(d) {
+  fontSize = Math.max(12, Math.min(28, fontSize + d));
+  const c = document.getElementById('epub-content');
+  if (c) c.style.fontSize = fontSize + 'px';
+}
+
+// ─── DRAG & DROP ──────────────────────────────────────────
+function initDragDrop() {
+  const zone = document.getElementById('upload-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.match(/\.(epub|pdf)$/i));
+    if (files.length) {
+      const dt = new DataTransfer();
+      files.forEach(f => dt.items.add(f));
+      const input = document.getElementById('file-input');
+      input.files = dt.files;
+      uploadBooks({target: input});
+    }
+  });
+}
+
+// ─── TOAST ────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─── INIT ─────────────────────────────────────────────────
+async function init() {
+  if (!handleToken()) {
+    document.getElementById('auth-screen').style.display = 'flex';
+    return;
+  }
+  const valid = await verifyToken();
+  if (!valid) {
+    document.getElementById('auth-screen').style.display = 'flex';
+    return;
+  }
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').style.flexDirection = 'column';
+  folderId = await getOrCreateFolder();
+  await refreshLibrary();
+  initDragDrop();
+}
+
+init();
+</script>
+</body>
+</html>
